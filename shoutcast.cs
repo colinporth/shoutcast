@@ -23,7 +23,7 @@ namespace shoutcast {
     /// <param name="destPath">destination path of the new file</param>
     /// <param name="filename">filename of the file to be created</param>
     /// <returns>an output stream on the file</returns>
-    private static Stream createNewFile (String destPath, String filename, String extension) {
+    private static Stream createFile (String destPath, String filename, String extension) {
 
       // replace characters, that are not allowed in filenames. (quick and dirrrrrty ;) )
       filename = filename.Replace (":", "");
@@ -34,7 +34,8 @@ namespace shoutcast {
       filename = filename.Replace ("|", "");
       filename = filename.Replace ("?", "");
       filename = filename.Replace ("*", "");
-      filename = filename.Replace ("\"", "");
+      filename = filename.Replace (",", "");
+      filename = filename.Replace (".", "");
 
       try {
         // create directory, if it doesn't exist
@@ -59,24 +60,17 @@ namespace shoutcast {
     [STAThread]static void Main (string[] args) {
 
       for (int i = 0; i < args.Length; i++)
-        Console.WriteLine ($"Arg[{i}] = [{args[i]}]");
-
+        Console.WriteLine ($"Arg i = args[i]");
       String server = (args.Length > 0) ? args[0] : "http://tjc.wnyc.org/js-stream.aac";
-      String serverPath = "/";
+      Console.WriteLine ("server: " + server);
 
-      String destPath = @"C:\shoutcast\";     // destination path for saved songs
-      String destExtension = ".aac";
-
-      Console.WriteLine (server + " " + serverPath);
-      Console.WriteLine (destPath + " " + destExtension);
-
-      // create HttpWebRequest
+      // form httpWebRequest
       HttpWebRequest request = (HttpWebRequest)WebRequest.Create (server);
-      request.Headers.Add ("GET", serverPath + " HTTP/1.0");
+      request.Headers.Add ("GET", "/" + " HTTP/1.0");
       request.Headers.Add ("Icy-MetaData", "1"); // enable metadata embedded in stream
-
-      // execute HttpWebRequest
-      HttpWebResponse response = null; 
+      //{{{  send request, getResponse, form path and extension
+      // getRespose
+      HttpWebResponse response = null;
       try {
         response = (HttpWebResponse)request.GetResponse();
         }
@@ -84,41 +78,66 @@ namespace shoutcast {
         Console.WriteLine (ex.Message);
         return;
         }
-      String contentType = response.GetResponseHeader ("Content-Type");
-      int metaInt = Convert.ToInt32 (response.GetResponseHeader ("icy-metaint"));
-      Console.WriteLine ("Content-Type: " + contentType);
-      Console.WriteLine ("icy-metaint:" + metaInt);
 
-      Stream stream = null;
+      String contentType = response.GetResponseHeader ("Content-Type");
+      Console.WriteLine ("Content-Type: " + contentType);
+
+      String icyDescription = response.GetResponseHeader ("icy-description");
+      Console.WriteLine ("icy-description: " + icyDescription);
+
+      int metaInt = Convert.ToInt32 (response.GetResponseHeader ("icy-metaint"));
+      Console.WriteLine ("icy-metaint: " + metaInt);
+
+      icyDescription = icyDescription.Replace (":", "");
+      icyDescription = icyDescription.Replace ("/", "");
+      icyDescription = icyDescription.Replace ("\\", "");
+      icyDescription = icyDescription.Replace ("<", "");
+      icyDescription = icyDescription.Replace (">", "");
+      icyDescription = icyDescription.Replace ("|", "");
+      icyDescription = icyDescription.Replace ("?", "");
+      icyDescription = icyDescription.Replace ("*", "");
+      icyDescription = icyDescription.Replace (",", "");
+      icyDescription = icyDescription.Replace (".", "");
+      String destPath = @"C:\shoutcast\" + icyDescription + @"\";
+
+      String destExtension = ".unknown";
+      if (contentType == "audio/mpeg")
+        destExtension = ".mp3";
+      else if (contentType == "audio/aacp")
+        destExtension = ".aac";
+      Console.WriteLine ("Saving to " + destPath + "title" + destExtension);
+      //}}}
+
+      Stream httpStream = null;
       Stream fileStream = null;
       try {
-        // open stream on response
-        stream = response.GetResponseStream();
+        httpStream = response.GetResponseStream();
 
-        // rip stream in an endless loop
-        int count = 0;
+        int metadataCount = 0;
         int metadataLength = 0;
         string metadataHeader = ""; // metadata header that contains the actual songtitle
         string oldMetadataHeader = null; // previous metadata header, to compare with new header and find next song
-        byte[] buffer = new byte[512]; // receive buffer
 
+        int headerState = 0;
         int outBytes = 0;
+        int skipBytes = 0;
+        byte[] buffer = new byte[512];
         while (true) {
           // read buffer
-          int bufLen = stream.Read (buffer, 0, buffer.Length);
-          if (bufLen < 0)
+          int bufferLength = httpStream.Read (buffer, 0, buffer.Length);
+          if (bufferLength < 0)
             return;
 
-          for (int i = 0; i < bufLen ; i++) {
+          for (int i = 0; i < bufferLength ; i++) {
             // if there is a header, the 'headerLength' would be set to a value != 0, save header to string
             if (metadataLength != 0) {
               metadataHeader += Convert.ToChar (buffer[i]);
               metadataLength--;
               if (metadataLength == 0) {
                 //{{{  all metadata informations were written to the 'metadataHeader' string
-                // if songtitle changes, create a new file
+                Console.WriteLine ("metadata: " + metadataHeader);
                 if (!metadataHeader.Equals (oldMetadataHeader)) {
-                  // flush and close old fileStream stream
+                  // if songtitle changes, create a new file flush and close old fileStream stream
                   if (fileStream != null) {
                     fileStream.Flush();
                     fileStream.Close();
@@ -127,13 +146,15 @@ namespace shoutcast {
 
                   // extract songtitle from metadata header. Trim was needed, because some stations don't trim the songtitle
                   string fileName = Regex.Match (metadataHeader, "(StreamTitle=')(.*)(';StreamUrl)").Groups[2].Value.Trim();
+                  //string fileName = Regex.Match (metadataHeader, "(StreamTitle=')(.*)(';").Groups[2].Value.Trim();
 
                   // write new songtitle to console for information
                   Console.WriteLine ("Saving: " + fileName);
 
                   // create new file with the songtitle from header and set a stream on this file
-                  fileStream = createNewFile (destPath, fileName, destExtension);
+                  fileStream = createFile (destPath, fileName, destExtension);
                   outBytes = 0;
+                  headerState = 0;
 
                   // save new header to 'oldMetadataHeader' string, to compare if there's a new song starting
                   oldMetadataHeader = metadataHeader;
@@ -145,18 +166,42 @@ namespace shoutcast {
               }
             else {
               //{{{  write data to file or extract metadata headerlength
-              if (count++ < metaInt) {
+              if (metadataCount++ < metaInt) {
                 // write bytes to filestream
                 if (fileStream != null) {
                   // as long as we don't have a songtitle, we don't open a new file and don't write any bytes
-                  outBytes++;
-                  fileStream.Write(buffer, i, 1);
+                  if (headerState == 0) {
+                    // waiting for header
+                    if (buffer[i] == 0xFF)
+                      headerState = 1;
+                    else
+                      skipBytes++;
+                    }
+                  else if (headerState == 1) {
+                    // waiting for 2nd header byte
+                    if (buffer[i] >> 5 == 0x07) {
+                      // 2nd header byte
+                      fileStream.WriteByte (0xFF);
+                      fileStream.Write (buffer, i, 1);
+                      headerState = 2;
+
+                      Console.WriteLine ("skipped bytes to header " + skipBytes);
+                      }
+                    else {
+                      skipBytes++;
+                      headerState = 0;
+                      }
+                    }
+                  else {
+                    outBytes++;
+                    fileStream.Write (buffer, i, 1);
+                    }
                   }
                 }
               else {
                 // get headerlength from lengthbyte and multiply by 16 to get correct headerlength
                 metadataLength = Convert.ToInt32 (buffer[i]) * 16;
-                count = 0;
+                metadataCount = 0;
                 }
               }
               //}}}
@@ -167,8 +212,8 @@ namespace shoutcast {
         Console.WriteLine ("shoutcast failed " + ex.Message);
         }
       finally {
-        if (stream != null)
-          stream.Close();
+        if (httpStream != null)
+          httpStream.Close();
         if (fileStream != null)
           fileStream.Close();
         }
