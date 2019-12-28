@@ -17,46 +17,46 @@ namespace shoutcast {
   public class shoutcast {
     private shoutcast() {}
     //{{{
-      /// <summary>
-      /// Create new file without overwritin existing files with the same filename.
-      /// </summary>
-      /// <param name="destPath">destination path of the new file</param>
-      /// <param name="filename">filename of the file to be created</param>
-      /// <returns>an output stream on the file</returns>
-      private static Stream createNewFile (String destPath, String filename, String extension) {
+    /// <summary>
+    /// Create new file without overwritin existing files with the same filename.
+    /// </summary>
+    /// <param name="destPath">destination path of the new file</param>
+    /// <param name="filename">filename of the file to be created</param>
+    /// <returns>an output stream on the file</returns>
+    private static Stream createNewFile (String destPath, String filename, String extension) {
 
-        // replace characters, that are not allowed in filenames. (quick and dirrrrrty ;) )
-        filename = filename.Replace (":", "");
-        filename = filename.Replace ("/", "");
-        filename = filename.Replace ("\\", "");
-        filename = filename.Replace ("<", "");
-        filename = filename.Replace (">", "");
-        filename = filename.Replace ("|", "");
-        filename = filename.Replace ("?", "");
-        filename = filename.Replace ("*", "");
-        filename = filename.Replace ("\"", "");
+      // replace characters, that are not allowed in filenames. (quick and dirrrrrty ;) )
+      filename = filename.Replace (":", "");
+      filename = filename.Replace ("/", "");
+      filename = filename.Replace ("\\", "");
+      filename = filename.Replace ("<", "");
+      filename = filename.Replace (">", "");
+      filename = filename.Replace ("|", "");
+      filename = filename.Replace ("?", "");
+      filename = filename.Replace ("*", "");
+      filename = filename.Replace ("\"", "");
 
-        try {
-          // create directory, if it doesn't exist
-          if (!Directory.Exists (destPath))
-            Directory.CreateDirectory (destPath);
+      try {
+        // create directory, if it doesn't exist
+        if (!Directory.Exists (destPath))
+          Directory.CreateDirectory (destPath);
 
-          // create new file
-          if (!File.Exists (destPath + filename + extension))
-            return File.Create (destPath + filename + extension);
-          else
-            // if file already exists, create a new file named <filename>(i)
-            for (int i = 1; ; i++)
-              if (!File.Exists (destPath + filename + "(" + i + ")" + extension))
-                return File.Create (destPath + filename + "(" + i + ")" + extension);
-          }
-        catch (IOException) {
-          return null;
-          }
+        // create new file
+        if (!File.Exists (destPath + filename + extension))
+          return File.Create (destPath + filename + extension);
+        else
+          // if file already exists, create a new file named <filename>(i)
+          for (int i = 1; ; i++)
+            if (!File.Exists (destPath + filename + "(" + i + ")" + extension))
+              return File.Create (destPath + filename + "(" + i + ")" + extension);
         }
+      catch (IOException) {
+        return null;
+        }
+      }
     //}}}
 
-    [STAThread] static void Main (string[] args) {
+    [STAThread]static void Main (string[] args) {
 
       for (int i = 0; i < args.Length; i++)
         Console.WriteLine ($"Arg[{i}] = [{args[i]}]");
@@ -67,7 +67,8 @@ namespace shoutcast {
       String destPath = @"C:\shoutcast\";     // destination path for saved songs
       String destExtension = ".aac";
 
-      Console.WriteLine (server + " " + serverPath + " "  + destPath + " " + destExtension);
+      Console.WriteLine (server + " " + serverPath);
+      Console.WriteLine (destPath + " " + destExtension);
 
       // create HttpWebRequest
       HttpWebRequest request = (HttpWebRequest)WebRequest.Create (server);
@@ -85,7 +86,8 @@ namespace shoutcast {
         }
       String contentType = response.GetResponseHeader ("Content-Type");
       int metaInt = Convert.ToInt32 (response.GetResponseHeader ("icy-metaint"));
-      Console.WriteLine ("Content-Type: " + contentType + " icy-metaint:" + metaInt);
+      Console.WriteLine ("Content-Type: " + contentType);
+      Console.WriteLine ("icy-metaint:" + metaInt);
 
       Stream stream = null;
       Stream fileStream = null;
@@ -147,10 +149,8 @@ namespace shoutcast {
                 // write bytes to filestream
                 if (fileStream != null) {
                   // as long as we don't have a songtitle, we don't open a new file and don't write any bytes
-                  outBytes += i;
-                  fileStream.Write (buffer, i, 1);
-                  if (count % 100 == 0)
-                    fileStream.Flush();
+                  outBytes++;
+                  fileStream.Write(buffer, i, 1);
                   }
                 }
               else {
@@ -164,13 +164,13 @@ namespace shoutcast {
           }
         }
       catch (Exception ex) {
-        Console.WriteLine (ex.Message);
+        Console.WriteLine ("shoutcast failed " + ex.Message);
         }
       finally {
-        if (fileStream != null)
-          fileStream.Close();
         if (stream != null)
           stream.Close();
+        if (fileStream != null)
+          fileStream.Close();
         }
       }
     }
