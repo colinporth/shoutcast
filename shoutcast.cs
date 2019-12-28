@@ -73,10 +73,10 @@ namespace shoutcast {
       // create HttpWebRequest
       HttpWebRequest request = (HttpWebRequest)WebRequest.Create (server);
       request.Headers.Add ("GET", serverPath + " HTTP/1.0");
-      request.Headers.Add ("Icy-MetaData", "1"); // needed to receive metadata informations
+      request.Headers.Add ("Icy-MetaData", "1"); // enable metadata embedded in stream
 
       // execute HttpWebRequest
-      HttpWebResponse response = null; // web response
+      HttpWebResponse response = null; 
       try {
         response = (HttpWebResponse)request.GetResponse();
         }
