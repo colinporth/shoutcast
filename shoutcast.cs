@@ -59,13 +59,11 @@ namespace shoutcast {
 
     [STAThread]static void Main (string[] args) {
 
-      for (int i = 0; i < args.Length; i++)
-        Console.WriteLine ($"Arg i = args[i]");
-      String server = (args.Length > 0) ? args[0] : "http://tjc.wnyc.org/js-stream.aac";
-      Console.WriteLine ("server: " + server);
+      String url = (args.Length > 0) ? args[0] : "http://tjc.wnyc.org/js-stream.aac";
+      Console.WriteLine ("url: " + url);
 
       // form httpWebRequest
-      HttpWebRequest request = (HttpWebRequest)WebRequest.Create (server);
+      HttpWebRequest request = (HttpWebRequest)WebRequest.Create (url);
       request.Headers.Add ("GET", "/" + " HTTP/1.0");
       request.Headers.Add ("Icy-MetaData", "1"); // enable metadata embedded in stream
       //{{{  send request, getResponse, form path and extension
@@ -105,6 +103,8 @@ namespace shoutcast {
         destExtension = ".mp3";
       else if (contentType == "audio/aacp")
         destExtension = ".aac";
+      else if (contentType == "audio/aac")
+        destExtension = ".aac";
       Console.WriteLine ("Saving to " + destPath + "title" + destExtension);
       //}}}
 
@@ -134,7 +134,7 @@ namespace shoutcast {
               metadataHeader += Convert.ToChar (buffer[i]);
               metadataLength--;
               if (metadataLength == 0) {
-                //{{{  all metadata informations were written to the 'metadataHeader' string
+                //{{{  all metadata written to the 'metadataHeader' string
                 Console.WriteLine ("metadata: " + metadataHeader);
                 if (!metadataHeader.Equals (oldMetadataHeader)) {
                   // if songtitle changes, create a new file flush and close old fileStream stream
@@ -145,8 +145,8 @@ namespace shoutcast {
                     }
 
                   // extract songtitle from metadata header. Trim was needed, because some stations don't trim the songtitle
-                  string fileName = Regex.Match (metadataHeader, "(StreamTitle=')(.*)(';StreamUrl)").Groups[2].Value.Trim();
-                  //string fileName = Regex.Match (metadataHeader, "(StreamTitle=')(.*)(';").Groups[2].Value.Trim();
+                  Match match = Regex.Match (metadataHeader, "(StreamTitle=')(.*)(';StreamUrl)");
+                  string fileName = match.Groups[2].Value.Trim();
 
                   // write new songtitle to console for information
                   Console.WriteLine ("Saving: " + fileName);
@@ -181,15 +181,17 @@ namespace shoutcast {
                     // waiting for 2nd header byte
                     if (buffer[i] >> 5 == 0x07) {
                       // 2nd header byte
-                      fileStream.WriteByte (0xFF);
-                      fileStream.Write (buffer, i, 1);
                       headerState = 2;
 
+                      fileStream.WriteByte (0xFF);
+                      fileStream.Write (buffer, i, 1);
+
                       Console.WriteLine ("skipped bytes to header " + skipBytes);
+                      skipBytes = 0;
                       }
                     else {
-                      skipBytes++;
                       headerState = 0;
+                      skipBytes++;
                       }
                     }
                   else {
